@@ -28,14 +28,23 @@ jobs:
         with:
           version: '0.11.3'
       - run: uv sync --locked --dev --extra sonic --extra debug
-      - name: Run real admin regression
+      - name: Run real admin regression and related admin tests
         run: |
           mkdir -p "$DATA_DIR" "$PERSONAS_DIR"
-          uv run --no-sync --no-sources pytest archivebox/tests/test_ui_admin_crawl_resume.py -x -v --junitxml="$RUNNER_TEMP/results.xml"
+          uv run --no-sync --no-sources pytest archivebox/tests/test_ui_admin_crawl_resume.py archivebox/tests/test_ui_admin_crawl.py -x -v --junitxml="$RUNNER_TEMP/results.xml"
+      - name: Repository lint and formatting
+        if: always()
+        run: |
+          uv run --no-sync --no-sources prek run --all-files
+      - name: Save formatting corrections for local application
+        if: failure()
+        run: git diff > "$RUNNER_TEMP/formatting.patch"
       - name: Save regression results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: bulk-resume-results
-          path: ${{ runner.temp }}/results.xml
+          path: |
+            ${{ runner.temp }}/results.xml
+            ${{ runner.temp }}/formatting.patch
           if-no-files-found: ignore
