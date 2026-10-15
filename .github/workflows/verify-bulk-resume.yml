@@ -16,6 +16,8 @@ jobs:
       USE_COLOR: 'False'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: c5ea9a34feb587a125a8e168b4a4929bcee54b62
       - name: Isolate runtime paths
         run: |
           echo "DATA_DIR=$RUNNER_TEMP/archivebox-data" >> "$GITHUB_ENV"
@@ -31,7 +33,13 @@ jobs:
       - name: Run real admin regression and related admin tests
         run: |
           mkdir -p "$DATA_DIR" "$PERSONAS_DIR"
-          uv run --no-sync --no-sources pytest archivebox/tests/test_ui_admin_crawl_resume.py archivebox/tests/test_ui_admin_crawl.py -x -v --junitxml="$RUNNER_TEMP/results.xml"
+          uv run --no-sync --no-sources pytest -x -v --junitxml="$RUNNER_TEMP/results.xml" \
+            archivebox/tests/test_ui_admin_crawl_resume.py \
+            archivebox/tests/test_ui_admin_crawl.py \
+            archivebox/tests/test_crawl_pause.py \
+            archivebox/tests/test_crawl_runner.py::test_snapshot_queue_selection_is_retry_at_only_for_sealed_maintenance \
+            archivebox/tests/test_crawl_runner.py::test_crawl_start_event_does_not_reschedule_sealed_parent_until_explicit_requeue \
+            archivebox/tests/test_crawl_runner.py::test_crawl_completed_event_requeues_active_snapshots
       - name: Repository lint and formatting
         if: always()
         run: |
