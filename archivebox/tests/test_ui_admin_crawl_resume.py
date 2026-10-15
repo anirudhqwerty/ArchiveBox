@@ -20,8 +20,7 @@ def test_bulk_resume_requeues_paused_children_with_bounded_sql(admin_client, adm
     for status in (Crawl.StatusChoices.PAUSED, Crawl.StatusChoices.SEALED):
         crawl = Crawl.objects.create(urls="https://example.com/", created_by=admin_user, notes="keep parent notes")
         children = [
-            Snapshot.objects.create(crawl=crawl, url=f"https://example.com/{index}", title="keep title")
-            for index in range(child_count)
+            Snapshot.objects.create(crawl=crawl, url=f"https://example.com/{index}", title="keep title") for index in range(child_count)
         ]
         assert crawl.pause()
         if status == Crawl.StatusChoices.SEALED:
@@ -35,11 +34,18 @@ def test_bulk_resume_requeues_paused_children_with_bounded_sql(admin_client, adm
     active_child = Snapshot.objects.create(crawl=active, url="https://example.net/")
     assert active_child.pause()
     sealed = Snapshot.objects.create(
-        crawl=selected[0][0], url="https://example.com/sealed", status=Snapshot.StatusChoices.SEALED, retry_at=None,
+        crawl=selected[0][0],
+        url="https://example.com/sealed",
+        status=Snapshot.StatusChoices.SEALED,
+        retry_at=None,
     )
     result = ArchiveResult.objects.create(
-        snapshot=selected[0][1][0], plugin="title", hook_name="on_Snapshot__01_title",
-        status=ArchiveResult.StatusChoices.SUCCEEDED, output_str="previous title", output_size=14,
+        snapshot=selected[0][1][0],
+        plugin="title",
+        hook_name="on_Snapshot__01_title",
+        status=ArchiveResult.StatusChoices.SUCCEEDED,
+        output_str="previous title",
+        output_size=14,
     )
     old_results = list(ArchiveResult.objects.order_by("pk").values())
     old_crawls = {row["id"]: row for row in Crawl.objects.values()}
@@ -48,7 +54,11 @@ def test_bulk_resume_requeues_paused_children_with_bounded_sql(admin_client, adm
     with CaptureQueriesContext(connection) as queries:
         response = admin_client.post(
             reverse("admin:crawls_crawl_changelist"),
-            {"action": "resume_selected_crawls", "_selected_action": [str(crawl.pk) for crawl, _ in selected] + [str(active.pk)], "index": "0"},
+            {
+                "action": "resume_selected_crawls",
+                "_selected_action": [str(crawl.pk) for crawl, _ in selected] + [str(active.pk)],
+                "index": "0",
+            },
             HTTP_HOST=ADMIN_TEST_HOST,
         )
     after = timezone.now()
@@ -77,10 +87,7 @@ def test_bulk_resume_requeues_paused_children_with_bounded_sql(admin_client, adm
     assert ArchiveResult.objects.filter(pk=result.pk).exists()
     assert Snapshot.objects.filter(pk=sealed.pk, status=Snapshot.StatusChoices.SEALED).exists()
     assert Snapshot.objects.filter(pk=untouched_child.pk, status=Snapshot.StatusChoices.PAUSED).exists()
-    scheduler_updates = [
-        query["sql"] for query in queries
-        if query["sql"].startswith(('UPDATE "crawls_crawl"', 'UPDATE "core_snapshot"'))
-    ]
+    scheduler_updates = [query["sql"] for query in queries if query["sql"].startswith(('UPDATE "crawls_crawl"', 'UPDATE "core_snapshot"'))]
     assert len(scheduler_updates) == 2
     assert not any('UPDATE "core_archiveresult"' in query["sql"] for query in queries)
 
