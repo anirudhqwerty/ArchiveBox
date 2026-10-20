@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: a26ea992ffd20ff8c82c5941dbd3d2923598d403
+          ref: 2d806f79b520e16293f0bcafd72ba8311e79fb27
       - name: Isolate runtime paths
         run: |
           echo "DATA_DIR=$RUNNER_TEMP/archivebox-data" >> "$GITHUB_ENV"
