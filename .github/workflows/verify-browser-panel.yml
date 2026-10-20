@@ -41,7 +41,7 @@ jobs:
       - name: Run unchanged browser-panel assertions with four workers
         run: |
           mkdir -p "$DATA_DIR" "$PERSONAS_DIR"
-          uv run --no-sync --no-sources pytest -vs -n 4 archivebox/tests/test_opencode_browser_panel.py --basetemp="$RUNNER_TEMP/pytest" --junitxml="$RUNNER_TEMP/results.xml"
+          uv run --no-sync --no-sources pytest -vs -n 4 "$GITHUB_WORKSPACE/archivebox/tests/test_opencode_browser_panel.py" --basetemp="$RUNNER_TEMP/pytest" --junitxml="$RUNNER_TEMP/results.xml"
       - name: Retain measurements
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
