@@ -1,6 +1,8 @@
 """Verify real running crawls stop admitting captures after user Pause."""
 
 import json
+import os
+import signal
 import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -15,8 +17,10 @@ from archivebox.crawls.models import Crawl
 from archivebox.machine.models import Process
 from archivebox.tests.conftest import (
     ADMIN_TEST_HOST,
+    api_client_request,
     cleanup_process_group,
     cli_env,
+    create_admin_and_token,
     parse_jsonl_output,
     run_archivebox_cmd,
 )
@@ -48,6 +52,7 @@ def test_live_pause_stops_new_captures_and_survives_runner_restart(initialized_a
     runner = None
     hook_pid = None
     try:
+        api_token = create_admin_and_token(initialized_archive) if pause_via == "api" else None
         created = run_archivebox_cmd(["crawl", "create", *urls], cwd=initialized_archive, env=env)
         assert created.returncode == 0, created.stdout + created.stderr
         crawl_id = next(record["id"] for record in parse_jsonl_output(created.stdout) if record.get("type") == "Crawl")
@@ -88,11 +93,12 @@ def test_live_pause_stops_new_captures_and_survives_runner_restart(initialized_a
                 )
                 assert response.status_code == 302
             else:
-                response = client.patch(
+                response = api_client_request(
+                    client,
+                    "patch",
                     f"/api/v1/crawls/crawl/{crawl_id}",
-                    data={"action": "pause"},
-                    content_type="application/json",
-                    HTTP_HOST=ADMIN_TEST_HOST,
+                    payload={"action": "pause"},
+                    api_token=api_token,
                 )
                 assert response.status_code == 200, response.content
             crawl = Crawl.objects.get(pk=crawl_id)
@@ -124,11 +130,12 @@ def test_live_pause_stops_new_captures_and_survives_runner_restart(initialized_a
                 )
                 assert response.status_code == 302
             else:
-                response = client.patch(
+                response = api_client_request(
+                    client,
+                    "patch",
                     f"/api/v1/crawls/crawl/{crawl_id}",
-                    data={"action": "resume"},
-                    content_type="application/json",
-                    HTTP_HOST=ADMIN_TEST_HOST,
+                    payload={"action": "resume"},
+                    api_token=api_token,
                 )
                 assert response.status_code == 200, response.content
         resumed = run_archivebox_cmd(["run", f"--crawl-id={crawl_id}"], cwd=initialized_archive, env=env, timeout=90)
@@ -146,6 +153,17 @@ def test_live_pause_stops_new_captures_and_survives_runner_restart(initialized_a
             assert all(path.read_bytes() == content for path, content in old_files.items())
             print(json.dumps({"pause_via": pause_via, "crawl": crawl_id, "paused_runner_restarts": 2, "completed_captures": 3}))
     finally:
+        # SIGTERM is an interactive pause request for this CLI. If the test
+        # fails while it is running, terminate only our disposable subprocess
+        # groups so cleanup cannot obscure the original assertion failure.
+        if runner is not None and runner.poll() is None:
+            for pid in (runner.pid, hook_pid):
+                if pid:
+                    try:
+                        os.killpg(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+            runner.communicate(timeout=10)
         cleanup_process_group(runner.pid if runner else None, hook_pid)
         origin.shutdown()
         origin.server_close()
